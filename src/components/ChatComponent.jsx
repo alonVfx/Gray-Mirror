@@ -34,8 +34,8 @@ const ChatComponent = () => {
     setIsLoading(true);
 
     try {
-      // This would call your Cloud Function
-      const response = await simulateGeminiResponse(inputMessage);
+      // Call the real Gemini API through Cloud Functions
+      const response = await callGeminiAPI(inputMessage);
       
       const aiMessage = {
         id: Date.now() + 1,
@@ -63,23 +63,23 @@ const ChatComponent = () => {
     setIsLoading(false);
   };
 
-  const simulateGeminiResponse = async (message) => {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-    
-    // Mock responses based on input
-    const responses = [
-      'זה מעניין מאוד! אני מבין את הנקודה שלך.',
-      'אני חושב שיש כאן הזדמנות מצוינת לחקור את הנושא הזה יותר לעומק.',
-      'האם תוכל לפרט יותר על הרעיון הזה?',
-      'זה מזכיר לי משהו שקראתי לאחרונה...',
-      'אני רואה שאתה חושב בצורה יצירתית על הבעיה הזו.',
-      'בואו נבחן את זה מזווית אחרת.',
-      'זה יכול להיות פתרון מעניין, אבל יש כמה אתגרים שצריך לקחת בחשבון.',
-      'אני מסכים עם הכיוון הכללי, אבל אולי כדאי לשקול גם אלטרנטיבות.'
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
+  const callGeminiAPI = async (message) => {
+    try {
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const functions = getFunctions();
+      const callGemini = httpsCallable(functions, 'callGemini');
+      
+      const result = await callGemini({
+        prompt: message,
+        agents: [], // You can pass agent context here later
+        conversationHistory: messages.slice(-10).map(msg => ({ sender: msg.sender, text: msg.text }))
+      });
+      
+      return result.data.response;
+    } catch (error) {
+      console.error('Error calling Gemini API:', error);
+      throw error;
+    }
   };
 
   const handleKeyPress = (e) => {
