@@ -4,14 +4,14 @@ import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 
 // Your Firebase configuration
-// Replace these values with your actual Firebase config
 const firebaseConfig = {
-  apiKey: "your-api-key",
+  apiKey: "AIzaSyC99vhgBDnv6Y-whD78Li_Qa7cr_xs_vWw",
   authDomain: "gray-mirror-274ac.firebaseapp.com",
   projectId: "gray-mirror-274ac",
-  storageBucket: "gray-mirror-274ac.appspot.com",
-  messagingSenderId: "your-sender-id",
-  appId: "your-app-id"
+  storageBucket: "gray-mirror-274ac.firebasestorage.app",
+  messagingSenderId: "147395492761",
+  appId: "1:147395492761:web:ae0d619749846b294ff108",
+  measurementId: "G-JK787W1X8N"
 };
 
 // Initialize Firebase
