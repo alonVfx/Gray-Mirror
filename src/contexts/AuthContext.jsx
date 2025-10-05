@@ -4,10 +4,12 @@ import {
   signInWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
-  sendEmailVerification
+  sendEmailVerification,
+  signInWithPopup,
+  GoogleAuthProvider
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db, analytics, logEvent } from '../firebase/config';
+import { auth, db, analytics, logEvent, googleProvider } from '../firebase/config';
 
 const AuthContext = createContext();
 
@@ -86,6 +88,23 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      
+      // Track Google sign-in
+      if (analytics) {
+        logEvent(analytics, 'login', {
+          method: 'google'
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const logout = async () => {
     try {
       // Track user logout
@@ -103,6 +122,7 @@ export function AuthProvider({ children }) {
     user,
     signup,
     login,
+    signInWithGoogle,
     logout
   };
 

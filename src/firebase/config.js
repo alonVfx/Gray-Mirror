@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { getAnalytics, logEvent } from 'firebase/analytics';
@@ -25,6 +25,9 @@ export const functions = getFunctions(app);
 
 // Initialize Analytics (only in browser environment)
 export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
+
+// Initialize Google Auth Provider
+export const googleProvider = new GoogleAuthProvider();
 
 // Export logEvent for analytics tracking
 export { logEvent };
