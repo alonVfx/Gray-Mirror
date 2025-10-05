@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { AlertCircle, Mail, Lock, User, MessageSquare, Sparkles, Users, Zap, ArrowRight, Shield, Brain } from 'lucide-react';
 
@@ -9,6 +10,7 @@ const AuthPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, signup, signInWithGoogle, user } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,9 +20,11 @@ const AuthPage = () => {
     try {
       if (isLogin) {
         await login(email, password);
+        navigate('/dashboard');
       } else {
         await signup(email, password);
         setError('נשלח אימייל אימות. אנא בדוק את תיבת הדואר שלך.');
+        navigate('/dashboard');
       }
     } catch (error) {
       setError(error.message);
@@ -34,11 +38,19 @@ const AuthPage = () => {
 
     try {
       await signInWithGoogle();
+      navigate('/dashboard');
     } catch (error) {
       setError(error.message);
     }
     setLoading(false);
   };
+
+  // If already authenticated, redirect
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
