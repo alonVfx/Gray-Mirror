@@ -24,7 +24,7 @@ function AdminRoute({ children }) {
   }
   
   // Check if user is admin (you can implement this logic based on your needs)
-  const isAdmin = user?.email === 'admin@graymirror.com'; // Replace with your admin logic
+  const isAdmin = user?.email === 'admin@graymirror.com' || user?.email === 'alonsaranga@gmail.com'; // Temporary admin access
   
   return user && isAdmin ? children : <Navigate to="/dashboard" />;
 }
@@ -52,7 +52,7 @@ function App() {
                 </AdminRoute>
               } 
             />
-            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route path="/" element={<Navigate to="/auth" />} />
           </Routes>
         </div>
       </Router>

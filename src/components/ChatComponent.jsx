@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase/config';
 import { Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square } from 'lucide-react';
 
 const ChatComponent = () => {
@@ -36,8 +38,6 @@ const ChatComponent = () => {
 
   const callGeminiAPI = async (prompt) => {
     try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const functions = getFunctions();
       const callGemini = httpsCallable(functions, 'callGemini');
       
       const result = await callGemini({
@@ -107,6 +107,14 @@ const ChatComponent = () => {
       }
     } catch (error) {
       console.error('Error generating next turn:', error);
+      // Add error message to chat
+      const errorMessage = {
+        id: Date.now(),
+        text: 'שגיאה ביצירת תגובה. אנא נסה שוב.',
+        sender: 'מערכת',
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, errorMessage]);
     }
 
     setIsTyping(false);
@@ -158,6 +166,13 @@ const ChatComponent = () => {
         alert('יש להוסיף לפחות שני משתתפים.');
         return;
       }
+      
+      // Check quota for free users
+      if (user?.plan === 'free' && user?.quota?.messagesUsedToday >= user?.quota?.messagesLimitDaily) {
+        alert('הגעת לגבול ההודעות החינמיות. שדרג ל-Premium להמשך השימוש.');
+        return;
+      }
+      
       setIsConversationActive(true);
       setMessages([]);
       
@@ -175,6 +190,12 @@ const ChatComponent = () => {
 
   const sendUserMessage = async () => {
     if (!inputMessage.trim() || isTyping) return;
+    
+    // Check quota for free users
+    if (user?.plan === 'free' && user?.quota?.messagesUsedToday >= user?.quota?.messagesLimitDaily) {
+      alert('הגעת לגבול ההודעות החינמיות. שדרג ל-Premium להמשך השימוש.');
+      return;
+    }
 
     const userMessage = {
       id: Date.now(),
@@ -194,6 +215,14 @@ const ChatComponent = () => {
       await generateNextTurn();
     } catch (error) {
       console.error('Error sending user message:', error);
+      // Add error message to chat
+      const errorMessage = {
+        id: Date.now(),
+        text: 'שגיאה בשליחת הודעה. אנא נסה שוב.',
+        sender: 'מערכת',
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, errorMessage]);
     }
 
     setIsLoading(false);
@@ -443,6 +472,11 @@ const ChatComponent = () => {
         
         <div className="text-xs text-gray-500 text-center">
           {user?.quota?.messagesUsedToday || 0} / {user?.quota?.messagesLimitDaily || 20} הודעות נותרו
+          {user?.plan === 'free' && user?.quota?.messagesUsedToday >= user?.quota?.messagesLimitDaily && (
+            <div className="text-red-500 font-semibold mt-1">
+              הגעת לגבול ההודעות החינמיות
+            </div>
+          )}
         </div>
       </div>
     </div>

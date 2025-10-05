@@ -42,6 +42,17 @@ const DashboardPage = () => {
             </div>
             
             <div className="flex items-center space-x-4 space-x-reverse">
+              {/* Admin Access Button */}
+              {(user?.email === 'admin@graymirror.com' || user?.email === 'alonsaranga@gmail.com') && (
+                <a
+                  href="/admin"
+                  className="flex items-center space-x-2 space-x-reverse px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                  <span className="text-sm">מנהל</span>
+                </a>
+              )}
+              
               <div className="flex items-center space-x-2 space-x-reverse">
                 <Crown className={`h-5 w-5 ${user?.plan === 'premium' ? 'text-yellow-500' : 'text-gray-400'}`} />
                 <span className="text-sm text-gray-600">
