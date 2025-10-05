@@ -1,7 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { httpsCallable } from 'firebase/functions';
-import { functions, analytics, logEvent } from '../firebase/config';
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  orderBy, 
+  onSnapshot, 
+  serverTimestamp,
+  doc,
+  setDoc,
+  getDocs,
+  limit,
+  startAfter
+} from 'firebase/firestore';
+import { db, functions, analytics, logEvent } from '../firebase/config';
 import { Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square } from 'lucide-react';
 
 const ChatComponent = () => {
@@ -19,8 +32,11 @@ const ChatComponent = () => {
   const [scene, setScene] = useState('תא שליטה של חללית. אזעקה נשמעת.');
   const [isConversationActive, setIsConversationActive] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [conversationHistory, setConversationHistory] = useState([]);
   const messagesEndRef = useRef(null);
   const conversationTimeoutRef = useRef(null);
+  const unsubscribeRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,6 +46,108 @@ const ChatComponent = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Cleanup listener on unmount
+  useEffect(() => {
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+    };
+  }, []);
+
+  // Create a new conversation in Firestore
+  const createConversation = async () => {
+    try {
+      const conversationData = {
+        participants: participants,
+        scene: scene,
+        createdAt: serverTimestamp(),
+        createdBy: user.uid,
+        isActive: true
+      };
+
+      const conversationRef = await addDoc(
+        collection(db, 'users', user.uid, 'conversations'),
+        conversationData
+      );
+
+      console.log('Created conversation:', conversationRef.id);
+      return conversationRef.id;
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      throw error;
+    }
+  };
+
+  // Listen to messages in real-time
+  const listenToMessages = (conversationId) => {
+    if (!conversationId || !user) return;
+
+    const messagesRef = collection(db, 'users', user.uid, 'conversations', conversationId, 'messages');
+    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+
+    unsubscribeRef.current = onSnapshot(q, (snapshot) => {
+      const newMessages = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate?.() || new Date(doc.data().timestamp)
+      }));
+      
+      console.log('New messages received:', newMessages);
+      setMessages(newMessages);
+      
+      // Update conversation history for AI context
+      setConversationHistory(newMessages.map(msg => ({
+        sender: msg.sender,
+        text: msg.text
+      })));
+    }, (error) => {
+      console.error('Error listening to messages:', error);
+    });
+  };
+
+  // Save a message to Firestore
+  const saveMessageToFirestore = async (messageData) => {
+    if (!currentConversationId || !user) return;
+
+    try {
+      const message = {
+        ...messageData,
+        timestamp: serverTimestamp(),
+        userId: user.uid
+      };
+
+      await addDoc(
+        collection(db, 'users', user.uid, 'conversations', currentConversationId, 'messages'),
+        message
+      );
+    } catch (error) {
+      console.error('Error saving message to Firestore:', error);
+    }
+  };
+
+  // Load previous conversations
+  const loadConversations = async () => {
+    if (!user) return;
+
+    try {
+      const conversationsRef = collection(db, 'users', user.uid, 'conversations');
+      const q = query(conversationsRef, orderBy('createdAt', 'desc'), limit(10));
+      const snapshot = await getDocs(q);
+      
+      const conversations = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log('Loaded conversations:', conversations);
+      return conversations;
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+      return [];
+    }
+  };
+
   const participantColors = [
     'bg-blue-200 text-blue-900', 'bg-red-200 text-red-900', 'bg-green-200 text-green-900', 
     'bg-yellow-200 text-yellow-900', 'bg-purple-200 text-purple-900', 'bg-pink-200 text-pink-900',
@@ -38,18 +156,42 @@ const ChatComponent = () => {
 
   const callGeminiAPI = async (prompt) => {
     try {
+      console.log('Calling Gemini API with prompt:', prompt);
+      console.log('User authenticated:', !!user);
+      console.log('User ID:', user?.uid);
+      
       const callGemini = httpsCallable(functions, 'callGemini');
       
       const result = await callGemini({
         prompt: prompt,
         agents: participants,
-        conversationHistory: messages.slice(-10).map(msg => ({ sender: msg.sender, text: msg.text }))
+        conversationHistory: conversationHistory.slice(-10)
       });
       
-      return result.data.response;
+      console.log('Gemini API response:', result.data);
+      
+      if (result.data && result.data.response) {
+        return result.data.response;
+      } else {
+        console.warn('Unexpected response format:', result.data);
+        return 'תגובה לא צפויה מהמערכת';
+      }
     } catch (error) {
       console.error('Error calling Gemini API:', error);
-      throw error;
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details
+      });
+      
+      // Return a more detailed error message
+      if (error.code === 'unauthenticated') {
+        return 'שגיאת אימות - אנא התחבר מחדש';
+      } else if (error.code === 'resource-exhausted') {
+        return 'הגעת לגבול ההודעות היומי';
+      } else {
+        return `שגיאה: ${error.message}`;
+      }
     }
   };
 
@@ -81,40 +223,70 @@ const ChatComponent = () => {
   const generateNextTurn = async () => {
     if (!isConversationActive || isTyping) return;
 
+    console.log('Generating next turn...', { isConversationActive, isTyping });
     setIsTyping(true);
     setIsLoading(true);
 
     try {
       const prompt = createDirectorPrompt();
+      console.log('Created prompt:', prompt);
+      
       const response = await callGeminiAPI(prompt);
+      console.log('Received response:', response);
 
-      if (response) {
+      if (response && typeof response === 'string') {
         const parts = response.split(':');
+        console.log('Split response parts:', parts);
+        
         if (parts.length >= 2) {
           const speaker = parts[0].trim();
           const message = parts.slice(1).join(':').trim();
           
+          console.log('Speaker:', speaker, 'Message:', message);
+          console.log('Available participants:', participants.map(p => p.name));
+          
           if (participants.some(p => p.name === speaker)) {
             const newMessage = {
-              id: Date.now(),
               text: message,
               sender: speaker,
-              timestamp: new Date().toISOString()
+              type: 'ai'
             };
-            setMessages(prev => [...prev, newMessage]);
+            console.log('Adding new AI message:', newMessage);
+            await saveMessageToFirestore(newMessage);
+          } else {
+            console.warn('Speaker not found in participants:', speaker);
+            // Fallback: pick a random participant
+            const randomParticipant = participants[Math.floor(Math.random() * participants.length)];
+            const fallbackMessage = {
+              text: response,
+              sender: randomParticipant.name,
+              type: 'ai'
+            };
+            await saveMessageToFirestore(fallbackMessage);
           }
+        } else {
+          console.warn('Invalid response format:', response);
+          // Fallback: pick a random participant and use the full response
+          const randomParticipant = participants[Math.floor(Math.random() * participants.length)];
+          const fallbackMessage = {
+            text: response,
+            sender: randomParticipant.name,
+            type: 'ai'
+          };
+          await saveMessageToFirestore(fallbackMessage);
         }
+      } else {
+        console.warn('No valid response received:', response);
       }
     } catch (error) {
       console.error('Error generating next turn:', error);
-      // Add error message to chat
+      // Add error message to Firestore
       const errorMessage = {
-        id: Date.now(),
-        text: 'שגיאה ביצירת תגובה. אנא נסה שוב.',
+        text: `שגיאה ביצירת תגובה: ${error.message}`,
         sender: 'מערכת',
-        timestamp: new Date().toISOString()
+        type: 'error'
       };
-      setMessages(prev => [...prev, errorMessage]);
+      await saveMessageToFirestore(errorMessage);
     }
 
     setIsTyping(false);
@@ -151,7 +323,7 @@ const ChatComponent = () => {
     setParticipants(prev => prev.filter((_, i) => i !== index));
   };
 
-  const startStopConversation = () => {
+  const startStopConversation = async () => {
     if (isConversationActive) {
       // Stop conversation
       setIsConversationActive(false);
@@ -160,6 +332,15 @@ const ChatComponent = () => {
       }
       setIsTyping(false);
       setIsLoading(false);
+      
+      // Unsubscribe from messages
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+      
+      setCurrentConversationId(null);
+      setMessages([]);
       
       // Track conversation stop
       if (analytics) {
@@ -181,32 +362,50 @@ const ChatComponent = () => {
         return;
       }
       
-      setIsConversationActive(true);
-      setMessages([]);
-      
-      const sceneMessage = {
-        id: Date.now(),
-        text: scene.trim() || 'השיחה מתחילה ללא סצנה מוגדרת.',
-        sender: 'סצנה',
-        timestamp: new Date().toISOString()
-      };
-      setMessages([sceneMessage]);
-      
-      // Track conversation start
-      if (analytics) {
-        logEvent(analytics, 'conversation_started', {
-          participants_count: participants.length,
-          scene_length: scene.trim().length,
-          user_plan: user?.plan || 'unknown'
-        });
+      try {
+        setIsLoading(true);
+        
+        // Create conversation in Firestore
+        const conversationId = await createConversation();
+        setCurrentConversationId(conversationId);
+        
+        // Start listening to messages
+        listenToMessages(conversationId);
+        
+        // Add scene message
+        const sceneMessage = {
+          text: scene.trim() || 'השיחה מתחילה ללא סצנה מוגדרת.',
+          sender: 'סצנה',
+          type: 'scene'
+        };
+        
+        await saveMessageToFirestore(sceneMessage);
+        
+        setIsConversationActive(true);
+        
+        // Track conversation start
+        if (analytics) {
+          logEvent(analytics, 'conversation_started', {
+            participants_count: participants.length,
+            scene_length: scene.trim().length,
+            user_plan: user?.plan || 'unknown'
+          });
+        }
+        
+        // Start AI conversation after a delay
+        setTimeout(generateNextTurn, 2000);
+        
+      } catch (error) {
+        console.error('Error starting conversation:', error);
+        alert('שגיאה בהתחלת השיחה. אנא נסה שוב.');
+      } finally {
+        setIsLoading(false);
       }
-      
-      setTimeout(generateNextTurn, 1000);
     }
   };
 
   const sendUserMessage = async () => {
-    if (!inputMessage.trim() || isTyping) return;
+    if (!inputMessage.trim() || isTyping || !currentConversationId) return;
     
     // Check quota for free users
     if (user?.plan === 'free' && user?.quota?.messagesUsedToday >= user?.quota?.messagesLimitDaily) {
@@ -214,35 +413,38 @@ const ChatComponent = () => {
       return;
     }
 
-    const userMessage = {
-      id: Date.now(),
-      text: inputMessage,
-      sender: 'user',
-      timestamp: new Date().toISOString()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputMessage('');
-    setIsLoading(true);
-
     try {
+      const userMessage = {
+        text: inputMessage,
+        sender: 'user',
+        type: 'user'
+      };
+
+      // Save user message to Firestore
+      await saveMessageToFirestore(userMessage);
+      
+      setInputMessage('');
+      setIsLoading(true);
+
       if (conversationTimeoutRef.current) {
         clearTimeout(conversationTimeoutRef.current);
       }
+      
+      // Generate AI response
       await generateNextTurn();
+      
     } catch (error) {
       console.error('Error sending user message:', error);
-      // Add error message to chat
+      // Add error message to Firestore
       const errorMessage = {
-        id: Date.now(),
         text: 'שגיאה בשליחת הודעה. אנא נסה שוב.',
         sender: 'מערכת',
-        timestamp: new Date().toISOString()
+        type: 'error'
       };
-      setMessages(prev => [...prev, errorMessage]);
+      await saveMessageToFirestore(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   const updateScene = () => {

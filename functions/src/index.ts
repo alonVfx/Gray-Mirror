@@ -10,13 +10,19 @@ const genAI = new GoogleGenerativeAI(functions.config().gemini?.api_key || '');
 
 // Callable function to interact with Gemini
 export const callGemini = functions.https.onCall(async (data, context) => {
+  console.log('callGemini called with data:', data);
+  console.log('context.auth:', context.auth);
+  
   // Verify user is authenticated
   if (!context.auth) {
+    console.log('No authentication context found');
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
   const { prompt, agents, conversationHistory } = data;
   const userId = context.auth.uid;
+  
+  console.log('Processing request for user:', userId);
 
   try {
     // Check user quota
@@ -90,8 +96,25 @@ export const callGemini = functions.https.onCall(async (data, context) => {
 
   } catch (error) {
     console.error('Error calling Gemini:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to generate response');
+    // Return a more detailed error message
+    return {
+      response: `שגיאה: ${error.message}`,
+      error: error.message,
+      quotaUsed: 0,
+      quotaLimit: 20
+    };
   }
+});
+
+// Simple test function for debugging
+export const testFunction = functions.https.onCall(async (data, context) => {
+  console.log('testFunction called');
+  return {
+    message: 'Test function working!',
+    timestamp: new Date().toISOString(),
+    data: data,
+    auth: context.auth ? 'authenticated' : 'not authenticated'
+  };
 });
 
 // Function to reset daily quotas (should be called by a scheduled function)

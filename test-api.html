@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Gray Mirror API</title>
+</head>
+<body>
+    <h1>Test Gray Mirror API</h1>
+    <button onclick="testAPI()">Test CallGemini Function</button>
+    <div id="result"></div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyC99vhgBDnv6Y-whD78Li_Qa7cr_xs_vWw",
+            authDomain: "gray-mirror-274ac.firebaseapp.com",
+            projectId: "gray-mirror-274ac",
+            storageBucket: "gray-mirror-274ac.firebasestorage.app",
+            messagingSenderId: "147395492761",
+            appId: "1:147395492761:web:ae0d619749846b294ff108",
+            measurementId: "G-JK787W1X8N"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const functions = getFunctions(app);
+
+        window.testAPI = async function() {
+            try {
+                document.getElementById('result').innerHTML = 'Testing...';
+                
+                // Sign in anonymously for testing
+                const userCredential = await signInAnonymously(auth);
+                console.log('Signed in anonymously:', userCredential.user.uid);
+                
+                // First test the simple test function
+                const testFunc = httpsCallable(functions, 'testFunction');
+                const testResult = await testFunc({ test: 'hello' });
+                console.log('Test function result:', testResult.data);
+                
+                document.getElementById('result').innerHTML = 
+                    `<h3>Test Function Success!</h3><p>${JSON.stringify(testResult.data, null, 2)}</p>`;
+                
+                // Now test the callGemini function
+                setTimeout(async () => {
+                    try {
+                        const callGemini = httpsCallable(functions, 'callGemini');
+                        const result = await callGemini({
+                            prompt: 'Hello, this is a test message',
+                            agents: [{ name: 'Test Agent', identity: 'Test Identity' }],
+                            conversationHistory: []
+                        });
+                        
+                        document.getElementById('result').innerHTML += 
+                            `<h3>CallGemini Success!</h3><p>Response: ${result.data.response}</p>`;
+                        console.log('CallGemini Result:', result.data);
+                        
+                    } catch (geminiError) {
+                        document.getElementById('result').innerHTML += 
+                            `<h3>CallGemini Error!</h3><p>${geminiError.message}</p>`;
+                        console.error('CallGemini Error:', geminiError);
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                document.getElementById('result').innerHTML = 
+                    `<h3>Error!</h3><p>${error.message}</p>`;
+                console.error('API Test Error:', error);
+            }
+        };
+    </script>
+</body>
+</html>
