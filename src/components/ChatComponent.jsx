@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
@@ -19,6 +20,7 @@ import { Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square } fro
 
 const ChatComponent = () => {
   const { user } = useAuth();
+  const { isDarkMode } = useTheme();
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -83,17 +85,22 @@ const ChatComponent = () => {
   const listenToMessages = (conversationId) => {
     if (!conversationId || !user) return;
 
+    console.log('Setting up message listener for conversation:', conversationId);
     const messagesRef = collection(db, 'users', user.uid, 'conversations', conversationId, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
     unsubscribeRef.current = onSnapshot(q, (snapshot) => {
-      const newMessages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate?.() || new Date(doc.data().timestamp)
-      }));
+      console.log('Snapshot received, docs count:', snapshot.docs.length);
+      const newMessages = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          timestamp: data.timestamp?.toDate?.() || new Date(data.timestamp)
+        };
+      });
       
-      console.log('New messages received:', newMessages);
+      console.log('Processed messages:', newMessages);
       setMessages(newMessages);
       
       // Update conversation history for AI context
@@ -101,6 +108,11 @@ const ChatComponent = () => {
         sender: msg.sender,
         text: msg.text
       })));
+      
+      // Force scroll to bottom after state update
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
     }, (error) => {
       console.error('Error listening to messages:', error);
     });
@@ -490,16 +502,18 @@ const ChatComponent = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow h-[700px] flex flex-col">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow h-[800px] flex flex-col">
       {/* Chat Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium text-gray-900">סימולטור צ'אט קבוצתי</h2>
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">סימולטור צ'אט קבוצתי</h2>
           <div className="flex items-center space-x-2 space-x-reverse">
             <button
               onClick={toggleVoice}
               className={`p-2 rounded-full ${
-                voiceEnabled ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'
+                voiceEnabled 
+                  ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300' 
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
               }`}
             >
               {voiceEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
@@ -510,8 +524,8 @@ const ChatComponent = () => {
 
       <div className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden">
         {/* Participants Management */}
-        <div className="bg-gray-50 rounded-lg p-3 border">
-          <h3 className="font-semibold text-gray-700 mb-2 flex items-center">
+        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+          <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
             <Users className="h-4 w-4 ml-2" />
             ניהול משתתפים ({participants.length}/10)
           </h3>
@@ -532,20 +546,28 @@ const ChatComponent = () => {
             ))}
           </div>
           <div className="flex gap-2 mb-2">
-            <input
-              type="text"
-              value={newParticipant.name}
-              onChange={(e) => setNewParticipant(prev => ({ ...prev, name: e.target.value }))}
-              className="flex-1 p-2 border rounded-md text-sm"
-              placeholder="שם"
-            />
-            <input
-              type="text"
-              value={newParticipant.identity}
-              onChange={(e) => setNewParticipant(prev => ({ ...prev, identity: e.target.value }))}
-              className="flex-1 p-2 border rounded-md text-sm"
-              placeholder="זהות"
-            />
+            <div className="flex-1">
+              <label htmlFor="participant-name" className="sr-only">שם משתתף</label>
+              <input
+                id="participant-name"
+                type="text"
+                value={newParticipant.name}
+                onChange={(e) => setNewParticipant(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                placeholder="שם"
+              />
+            </div>
+            <div className="flex-1">
+              <label htmlFor="participant-identity" className="sr-only">זהות משתתף</label>
+              <input
+                id="participant-identity"
+                type="text"
+                value={newParticipant.identity}
+                onChange={(e) => setNewParticipant(prev => ({ ...prev, identity: e.target.value }))}
+                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                placeholder="זהות"
+              />
+            </div>
           </div>
           <button
             onClick={addParticipant}
@@ -558,12 +580,13 @@ const ChatComponent = () => {
 
         {/* Scene */}
         <div>
-          <label className="block text-gray-700 font-semibold mb-1">הגדרת סצנה:</label>
+          <label htmlFor="scene-description" className="block text-gray-700 dark:text-gray-300 font-semibold mb-1">הגדרת סצנה:</label>
           <div className="flex gap-2">
             <textarea
+              id="scene-description"
               value={scene}
               onChange={(e) => setScene(e.target.value)}
-              className="flex-1 p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               rows="2"
               placeholder="תא שליטה של חללית. אזעקה נשמעת."
             />
@@ -577,9 +600,9 @@ const ChatComponent = () => {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50 flex flex-col-reverse">
+        <div className="flex-1 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700 flex flex-col-reverse">
           {messages.length === 0 && (
-            <div className="text-center text-gray-500 mt-8">
+            <div className="text-center text-gray-500 dark:text-gray-400 mt-8">
               <p>השיחה תתחיל כאן...</p>
             </div>
           )}
@@ -653,12 +676,14 @@ const ChatComponent = () => {
           {isConversationActive && (
             <div className="flex gap-2">
               <div className="flex-1">
+                <label htmlFor="chat-input" className="sr-only">הודעה</label>
                 <input
+                  id="chat-input"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
                   placeholder="שלח הודעה כמשתמש..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   disabled={isLoading}
                 />
               </div>
@@ -689,10 +714,10 @@ const ChatComponent = () => {
           )}
         </div>
         
-        <div className="text-xs text-gray-500 text-center">
+        <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
           {user?.quota?.messagesUsedToday || 0} / {user?.quota?.messagesLimitDaily || 20} הודעות נותרו
           {user?.plan === 'free' && user?.quota?.messagesUsedToday >= user?.quota?.messagesLimitDaily && (
-            <div className="text-red-500 font-semibold mt-1">
+            <div className="text-red-500 dark:text-red-400 font-semibold mt-1">
               הגעת לגבול ההודעות החינמיות
             </div>
           )}

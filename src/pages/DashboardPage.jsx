@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import ChatComponent from '../components/ChatComponent';
 import AgentManager from '../components/AgentManager';
-import { LogOut, Settings, Users, MessageSquare, Crown } from 'lucide-react';
+import ConversationHistory from '../components/ConversationHistory';
+import { LogOut, Settings, Users, MessageSquare, Crown, Moon, Sun, History, Trash2 } from 'lucide-react';
 
 const DashboardPage = () => {
   const { user, logout } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('chat');
   const [showUpgrade, setShowUpgrade] = useState(false);
 
@@ -31,14 +34,14 @@ const DashboardPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <MessageSquare className="h-8 w-8 text-blue-600 ml-3" />
-              <h1 className="text-xl font-bold text-gray-900">Gray Mirror</h1>
+              <MessageSquare className="h-8 w-8 text-blue-600 dark:text-blue-400 ml-3" />
+              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Gray Mirror</h1>
             </div>
             
             <div className="flex items-center space-x-4 space-x-reverse">
@@ -53,20 +56,29 @@ const DashboardPage = () => {
                 </a>
               )}
               
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                title={isDarkMode ? 'מעבר למצב יום' : 'מעבר למצב לילה'}
+              >
+                {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+              
               <div className="flex items-center space-x-2 space-x-reverse">
                 <Crown className={`h-5 w-5 ${user?.plan === 'premium' ? 'text-yellow-500' : 'text-gray-400'}`} />
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-gray-600 dark:text-gray-300">
                   {user?.plan === 'premium' ? 'Premium' : 'Free'}
                 </span>
               </div>
               
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-600 dark:text-gray-300">
                 {user?.quota?.messagesUsedToday || 0} / {user?.quota?.messagesLimitDaily || 20} הודעות
               </div>
               
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 space-x-reverse text-gray-600 hover:text-gray-900"
+                className="flex items-center space-x-2 space-x-reverse text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
               >
                 <LogOut className="h-5 w-5" />
                 <span>יציאה</span>
@@ -124,8 +136,8 @@ const DashboardPage = () => {
                 onClick={() => setActiveTab('chat')}
                 className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
                   activeTab === 'chat'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-50'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
                 <MessageSquare className="h-5 w-5" />
@@ -133,11 +145,23 @@ const DashboardPage = () => {
               </button>
               
               <button
+                onClick={() => setActiveTab('history')}
+                className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
+                  activeTab === 'history'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <History className="h-5 w-5" />
+                <span>היסטוריית שיחות</span>
+              </button>
+              
+              <button
                 onClick={() => setActiveTab('agents')}
                 className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
                   activeTab === 'agents'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-50'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
                 <Users className="h-5 w-5" />
@@ -148,8 +172,8 @@ const DashboardPage = () => {
                 onClick={() => setActiveTab('settings')}
                 className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
                   activeTab === 'settings'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-50'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
                 <Settings className="h-5 w-5" />
@@ -161,11 +185,12 @@ const DashboardPage = () => {
           {/* Main Content */}
           <div className="flex-1">
             {activeTab === 'chat' && <ChatComponent />}
+            {activeTab === 'history' && <ConversationHistory />}
             {activeTab === 'agents' && <AgentManager />}
             {activeTab === 'settings' && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">הגדרות</h2>
-                <p className="text-gray-600">הגדרות יגיעו בקרוב...</p>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">הגדרות</h2>
+                <p className="text-gray-600 dark:text-gray-300">הגדרות יגיעו בקרוב...</p>
               </div>
             )}
           </div>
