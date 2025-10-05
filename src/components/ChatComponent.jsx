@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase/config';
+import { functions, analytics, logEvent } from '../firebase/config';
 import { Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square } from 'lucide-react';
 
 const ChatComponent = () => {
@@ -160,6 +160,14 @@ const ChatComponent = () => {
       }
       setIsTyping(false);
       setIsLoading(false);
+      
+      // Track conversation stop
+      if (analytics) {
+        logEvent(analytics, 'conversation_stopped', {
+          participants_count: participants.length,
+          messages_count: messages.length
+        });
+      }
     } else {
       // Start conversation
       if (participants.length < 2) {
@@ -183,6 +191,15 @@ const ChatComponent = () => {
         timestamp: new Date().toISOString()
       };
       setMessages([sceneMessage]);
+      
+      // Track conversation start
+      if (analytics) {
+        logEvent(analytics, 'conversation_started', {
+          participants_count: participants.length,
+          scene_length: scene.trim().length,
+          user_plan: user?.plan || 'unknown'
+        });
+      }
       
       setTimeout(generateNextTurn, 1000);
     }

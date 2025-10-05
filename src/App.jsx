@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthPage from './pages/AuthPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminPage from './pages/AdminPage';
 import LoadingSpinner from './components/LoadingSpinner';
+import { analytics, logEvent } from './firebase/config';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -30,6 +31,16 @@ function AdminRoute({ children }) {
 }
 
 function App() {
+  useEffect(() => {
+    // Track app initialization
+    if (analytics) {
+      logEvent(analytics, 'app_initialized', {
+        app_name: 'Gray Mirror',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <Router>

@@ -7,7 +7,7 @@ import {
   sendEmailVerification
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { auth, db, analytics, logEvent } from '../firebase/config';
 
 const AuthContext = createContext();
 
@@ -55,6 +55,14 @@ export function AuthProvider({ children }) {
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password);
       await sendEmailVerification(result.user);
+      
+      // Track user signup
+      if (analytics) {
+        logEvent(analytics, 'sign_up', {
+          method: 'email'
+        });
+      }
+      
       return result;
     } catch (error) {
       throw error;
@@ -63,7 +71,16 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      return await signInWithEmailAndPassword(auth, email, password);
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Track user login
+      if (analytics) {
+        logEvent(analytics, 'login', {
+          method: 'email'
+        });
+      }
+      
+      return result;
     } catch (error) {
       throw error;
     }
@@ -71,6 +88,11 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
+      // Track user logout
+      if (analytics) {
+        logEvent(analytics, 'logout');
+      }
+      
       await signOut(auth);
     } catch (error) {
       throw error;
