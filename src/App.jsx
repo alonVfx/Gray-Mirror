@@ -6,7 +6,7 @@ import AuthPage from './pages/AuthPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminPage from './pages/AdminPage';
 import LoadingSpinner from './components/LoadingSpinner';
-import { analytics, logEvent } from './firebase/config';
+// import { analytics, logEvent } from './firebase/config';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -34,12 +34,7 @@ function AdminRoute({ children }) {
 function App() {
   useEffect(() => {
     // Track app initialization
-    if (analytics) {
-      logEvent(analytics, 'app_initialized', {
-        app_name: 'Gray Mirror',
-        timestamp: new Date().toISOString()
-      });
-    }
+    console.log('App initialized');
   }, []);
 
   return (

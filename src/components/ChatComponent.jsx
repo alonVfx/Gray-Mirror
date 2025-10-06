@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db, functions, analytics, logEvent } from '../firebase/config';
 import { aiManager, AI_PROVIDERS } from '../config/aiProviders';
-import AIProviderSelector from './AIProviderSelector';
+// import AIProviderSelector from './AIProviderSelector';
 import { Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square, Brain, History, RefreshCw } from 'lucide-react';
 
 const ChatComponent = () => {
@@ -41,8 +41,9 @@ const ChatComponent = () => {
   const [currentAIProvider, setCurrentAIProvider] = useState('together');
   const [conversationSummaries, setConversationSummaries] = useState([]);
   const [showMemoryPanel, setShowMemoryPanel] = useState(false);
-  const [conversationSpeed, setConversationSpeed] = useState(3); // Speed control (1-10)
-  const [customDelay, setCustomDelay] = useState(3000); // Custom delay in milliseconds
+  const [conversationSpeed, setConversationSpeed] = useState(5); // Speed control (1-10)
+  const [customDelay, setCustomDelay] = useState(5000); // Custom delay in milliseconds (5 seconds default)
+  const [isPaused, setIsPaused] = useState(false); // Pause conversation
   const messagesEndRef = useRef(null);
   const conversationTimeoutRef = useRef(null);
   const unsubscribeRef = useRef(null);
@@ -245,7 +246,7 @@ const ChatComponent = () => {
   };
 
   const generateNextTurn = async () => {
-    if (!isConversationActive || isTyping) return;
+    if (!isConversationActive || isTyping || isPaused) return;
 
     console.log('Generating next turn with AI provider:', currentAIProvider);
     setIsTyping(true);
@@ -546,32 +547,65 @@ const ChatComponent = () => {
           <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">סימולטור צ'אט קבוצתי</h2>
           <div className="flex items-center space-x-2 space-x-reverse">
                     {/* AI Provider Selector */}
-                    <AIProviderSelector
-                      currentProvider={currentAIProvider}
-                      onProviderChange={setCurrentAIProvider}
-                    />
+                    <select
+                      value={currentAIProvider}
+                      onChange={(e) => setCurrentAIProvider(e.target.value)}
+                      className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
+                    >
+                      <option value="openai">🤖 OpenAI</option>
+                      <option value="together">🚀 Together AI</option>
+                      <option value="gemini">🧠 Gemini</option>
+                    </select>
 
                     {/* Speed Control */}
                     <div className="flex items-center space-x-2 space-x-reverse">
-                      <label className="text-xs text-gray-600 dark:text-gray-400">מהירות:</label>
+                      <label className="text-xs text-gray-600 dark:text-gray-400">עיכוב:</label>
                       <input
                         type="range"
                         min="1"
-                        max="10"
-                        value={conversationSpeed}
+                        max="20"
+                        value={Math.round(customDelay / 500)}
                         onChange={(e) => {
-                          const speed = parseInt(e.target.value);
-                          setConversationSpeed(speed);
-                          // Convert speed (1-10) to delay (5000-500ms)
-                          const newDelay = 5500 - (speed * 500);
+                          const multiplier = parseInt(e.target.value);
+                          const newDelay = multiplier * 500; // 500ms to 10000ms (0.5s to 10s)
                           setCustomDelay(newDelay);
+                          // Convert delay back to speed for display
+                          const speed = Math.max(1, Math.min(10, Math.round(11 - (newDelay / 1000))));
+                          setConversationSpeed(speed);
                         }}
-                        className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                        title={`מהירות שיחה: ${conversationSpeed}/10`}
+                        className="w-20 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                        title={`עיכוב בין הודעות: ${(customDelay / 1000).toFixed(1)} שניות`}
                       />
                       <span className="text-xs text-gray-600 dark:text-gray-400 min-w-[60px]">
                         {(customDelay / 1000).toFixed(1)}s
                       </span>
+                      <button
+                        onClick={() => {
+                          const newDelay = prompt('הזן עיכוב בשניות (לדוגמה: 3.5):', (customDelay / 1000).toFixed(1));
+                          if (newDelay && !isNaN(parseFloat(newDelay))) {
+                            const delayMs = parseFloat(newDelay) * 1000;
+                            setCustomDelay(delayMs);
+                            const speed = Math.max(1, Math.min(10, Math.round(11 - (delayMs / 1000))));
+                            setConversationSpeed(speed);
+                          }
+                        }}
+                        className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                        title="הגדר עיכוב ידני"
+                      >
+                        ⚙️
+                      </button>
+                      
+                      <button
+                        onClick={() => setIsPaused(!isPaused)}
+                        className={`text-xs px-2 py-1 rounded ${
+                          isPaused 
+                            ? 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800'
+                            : 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800'
+                        }`}
+                        title={isPaused ? 'המשך שיחה' : 'השהה שיחה'}
+                      >
+                        {isPaused ? '▶️' : '⏸️'}
+                      </button>
                     </div>
 
                     {/* Test API Button */}
