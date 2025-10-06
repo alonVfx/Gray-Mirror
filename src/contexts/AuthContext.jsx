@@ -53,23 +53,32 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  const signup = async (email, password) => {
-    try {
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      await sendEmailVerification(result.user);
-      
-      // Track user signup
-      if (analytics) {
-        logEvent(analytics, 'sign_up', {
-          method: 'email'
-        });
-      }
-      
-      return result;
-    } catch (error) {
-      throw error;
-    }
-  };
+          const signup = async (email, password) => {
+            try {
+              const result = await createUserWithEmailAndPassword(auth, email, password);
+              await sendEmailVerification(result.user);
+
+              // Track user signup
+              if (analytics) {
+                logEvent(analytics, 'sign_up', {
+                  method: 'email'
+                });
+              }
+
+              return result;
+            } catch (error) {
+              // Provide more user-friendly error messages
+              if (error.code === 'auth/email-already-in-use') {
+                throw new Error('כתובת האימייל כבר בשימוש. נסה להתחבר או השתמש בכתובת אחרת.');
+              } else if (error.code === 'auth/weak-password') {
+                throw new Error('הסיסמה חלשה מדי. בחר סיסמה עם לפחות 6 תווים.');
+              } else if (error.code === 'auth/invalid-email') {
+                throw new Error('כתובת אימייל לא תקינה.');
+              } else {
+                throw new Error('שגיאה ביצירת חשבון: ' + error.message);
+              }
+            }
+          };
 
   const login = async (email, password) => {
     try {
@@ -84,7 +93,18 @@ export function AuthProvider({ children }) {
       
       return result;
     } catch (error) {
-      throw error;
+      // Provide more user-friendly error messages
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('משתמש לא נמצא. בדוק את כתובת האימייל או הירשם.');
+      } else if (error.code === 'auth/wrong-password') {
+        throw new Error('סיסמה שגויה. נסה שוב.');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('כתובת אימייל לא תקינה.');
+      } else if (error.code === 'auth/too-many-requests') {
+        throw new Error('יותר מדי ניסיונות. נסה שוב מאוחר יותר.');
+      } else {
+        throw new Error('שגיאה בהתחברות: ' + error.message);
+      }
     }
   };
 

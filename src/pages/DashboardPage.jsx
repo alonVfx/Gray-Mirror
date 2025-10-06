@@ -90,11 +90,13 @@ const DashboardPage = () => {
 
       {/* Email Verification Alert */}
       {user && !user.emailVerified && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-500 p-4">
           <div className="flex">
             <div className="ml-3">
-              <p className="text-sm text-yellow-700">
-                אנא אמת את כתובת המייל שלך. שלחנו לך אימייל אימות.
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                <strong>אימות אימייל נדרש:</strong> שלחנו אימייל אימות לכתובת {user.email}. 
+                אנא בדוק את תיבת הדואר שלך ולחץ על הקישור לאימות. 
+                אם לא רואה את האימייל, בדוק גם בתיקיית הספאם.
               </p>
             </div>
           </div>

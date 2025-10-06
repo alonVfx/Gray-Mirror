@@ -16,7 +16,9 @@ import {
   startAfter
 } from 'firebase/firestore';
 import { db, functions, analytics, logEvent } from '../firebase/config';
-import { Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square } from 'lucide-react';
+import { aiManager, AI_PROVIDERS } from '../config/aiProviders';
+import AIProviderSelector from './AIProviderSelector';
+import { Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square, Brain, History, RefreshCw } from 'lucide-react';
 
 const ChatComponent = () => {
   const { user } = useAuth();
@@ -36,6 +38,9 @@ const ChatComponent = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [currentAIProvider, setCurrentAIProvider] = useState('together');
+  const [conversationSummaries, setConversationSummaries] = useState([]);
+  const [showMemoryPanel, setShowMemoryPanel] = useState(false);
   const messagesEndRef = useRef(null);
   const conversationTimeoutRef = useRef(null);
   const unsubscribeRef = useRef(null);
@@ -47,6 +52,11 @@ const ChatComponent = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load conversation summaries on mount
+  useEffect(() => {
+    setConversationSummaries(aiManager.getConversationSummary());
+  }, []);
 
   // Cleanup listener on unmount
   useEffect(() => {
@@ -235,21 +245,29 @@ const ChatComponent = () => {
   const generateNextTurn = async () => {
     if (!isConversationActive || isTyping) return;
 
-    console.log('Generating next turn...', { isConversationActive, isTyping });
+    console.log('Generating next turn with AI provider:', currentAIProvider);
     setIsTyping(true);
     setIsLoading(true);
 
     try {
       const prompt = createDirectorPrompt();
       console.log('Created prompt:', prompt);
-      
-      const response = await callGeminiAPI(prompt);
-      console.log('Received response:', response);
+
+      // Use the new AI manager
+      const response = await aiManager.generateResponse(prompt, {
+        agents: participants,
+        conversationHistory: messages.slice(-10).map(msg => ({ 
+          sender: msg.sender, 
+          text: msg.text 
+        }))
+      });
+
+      console.log('Received response from AI:', response);
 
       if (response && typeof response === 'string') {
         const parts = response.split(':');
         console.log('Split response parts:', parts);
-        
+
         if (parts.length >= 2) {
           const speaker = parts[0].trim();
           const message = parts.slice(1).join(':').trim();
@@ -508,6 +526,26 @@ const ChatComponent = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">סימולטור צ'אט קבוצתי</h2>
           <div className="flex items-center space-x-2 space-x-reverse">
+            {/* AI Provider Selector */}
+            <AIProviderSelector 
+              currentProvider={currentAIProvider}
+              onProviderChange={setCurrentAIProvider}
+            />
+            
+            {/* Memory Panel Toggle */}
+            <button
+              onClick={() => setShowMemoryPanel(!showMemoryPanel)}
+              className={`p-2 rounded-full ${
+                showMemoryPanel 
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300' 
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+              }`}
+              title="ניהול זיכרון השיחה"
+            >
+              <Brain className="h-5 w-5" />
+            </button>
+            
+            {/* Voice Toggle */}
             <button
               onClick={toggleVoice}
               className={`p-2 rounded-full ${
@@ -515,12 +553,127 @@ const ChatComponent = () => {
                   ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300' 
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
               }`}
+              title="הפעל/כבה קול"
             >
               {voiceEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Memory Panel */}
+      {showMemoryPanel && (
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center">
+              <Brain className="h-5 w-5 ml-2" />
+              ניהול זיכרון השיחה
+            </h3>
+            <button
+              onClick={() => setShowMemoryPanel(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              ✕
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Current Provider Info */}
+            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border">
+              <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                ספק AI נוכחי
+              </h4>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <span className="text-2xl">
+                  {AI_PROVIDERS[currentAIProvider.toUpperCase()]?.icon || '🤖'}
+                </span>
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">
+                    {AI_PROVIDERS[currentAIProvider.toUpperCase()]?.name || 'Unknown'}
+                  </div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {messages.length} הודעות בשיחה
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Memory Stats */}
+            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border">
+              <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                סטטיסטיקות זיכרון
+              </h4>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">הודעות פעילות:</span>
+                  <span className="font-medium">{aiManager.memory.messages.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">סיכומים:</span>
+                  <span className="font-medium">{aiManager.memory.summaries.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">גודל חלון:</span>
+                  <span className="font-medium">20 הודעות</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Memory Actions */}
+            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border">
+              <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                פעולות זיכרון
+              </h4>
+              <div className="space-y-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      await aiManager.createConversationSummary();
+                      setConversationSummaries(aiManager.getConversationSummary());
+                    } catch (error) {
+                      console.error('Error creating summary:', error);
+                    }
+                  }}
+                  className="w-full px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition-colors"
+                >
+                  צור סיכום שיחה
+                </button>
+                <button
+                  onClick={() => {
+                    aiManager.startNewConversation();
+                    setMessages([]);
+                    setConversationHistory([]);
+                  }}
+                  className="w-full px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded transition-colors"
+                >
+                  התחל שיחה חדשה
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Conversation Summaries */}
+          {conversationSummaries.length > 0 && (
+            <div className="mt-4">
+              <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                סיכומי שיחות קודמות
+              </h4>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {conversationSummaries.map((summary, index) => (
+                  <div key={index} className="bg-white dark:bg-gray-800 p-2 rounded border text-sm">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      {new Date(summary.timestamp).toLocaleString('he-IL')}
+                    </div>
+                    <div className="text-gray-700 dark:text-gray-300 line-clamp-2">
+                      {summary.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden">
         {/* Participants Management */}

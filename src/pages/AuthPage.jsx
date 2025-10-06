@@ -23,7 +23,7 @@ const AuthPage = () => {
         navigate('/dashboard');
       } else {
         await signup(email, password);
-        setError('נשלח אימייל אימות. אנא בדוק את תיבת הדואר שלך.');
+        setError('נשלח אימייל אימות לכתובת: ' + email + '. אנא בדוק את תיבת הדואר שלך ולחץ על הקישור לאימות. אם לא רואה את האימייל, בדוק גם בתיקיית הספאם.');
         navigate('/dashboard');
       }
     } catch (error) {

@@ -38,8 +38,8 @@ export const callGemini = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('resource-exhausted', 'Daily message limit reached');
     }
 
-    // Generate response using Gemini
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+            // Generate response using Gemini
+            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     
     // Create context from agents and conversation history
     let contextPrompt = '';
