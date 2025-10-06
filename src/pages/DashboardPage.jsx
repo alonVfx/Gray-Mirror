@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import ChatComponent from '../components/ChatComponent';
+import AdvancedChatComponent from '../components/AdvancedChatComponent';
+import PodcastPlatform from '../components/PodcastPlatform';
 import AgentManager from '../components/AgentManager';
 import ConversationHistory from '../components/ConversationHistory';
-import { LogOut, Settings, Users, MessageSquare, Crown, Moon, Sun, History, Trash2 } from 'lucide-react';
+import { LogOut, Settings, Users, MessageSquare, Crown, Moon, Sun, History, Trash2, Headphones, Zap } from 'lucide-react';
 
 const DashboardPage = () => {
   const { user, logout } = useAuth();
@@ -134,17 +136,41 @@ const DashboardPage = () => {
           {/* Sidebar */}
           <div className="lg:w-64 flex-shrink-0">
             <nav className="space-y-2">
-              <button
-                onClick={() => setActiveTab('chat')}
-                className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
-                  activeTab === 'chat'
-                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-                }`}
-              >
-                <MessageSquare className="h-5 w-5" />
-                <span>צ'אט</span>
-              </button>
+                      <button
+                        onClick={() => setActiveTab('chat')}
+                        className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
+                          activeTab === 'chat'
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <MessageSquare className="h-5 w-5" />
+                        <span>צ'אט בסיסי</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab('advanced')}
+                        className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
+                          activeTab === 'advanced'
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <Zap className="h-5 w-5" />
+                        <span>צ'אט מתקדם</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab('podcasts')}
+                        className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
+                          activeTab === 'podcasts'
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <Headphones className="h-5 w-5" />
+                        <span>פודקאסטים AI</span>
+                      </button>
               
               <button
                 onClick={() => setActiveTab('history')}
@@ -184,18 +210,20 @@ const DashboardPage = () => {
             </nav>
           </div>
 
-          {/* Main Content */}
-          <div className="flex-1">
-            {activeTab === 'chat' && <ChatComponent />}
-            {activeTab === 'history' && <ConversationHistory />}
-            {activeTab === 'agents' && <AgentManager />}
-            {activeTab === 'settings' && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">הגדרות</h2>
-                <p className="text-gray-600 dark:text-gray-300">הגדרות יגיעו בקרוב...</p>
-              </div>
-            )}
-          </div>
+                  {/* Main Content */}
+                  <div className="flex-1">
+                    {activeTab === 'chat' && <ChatComponent />}
+                    {activeTab === 'advanced' && <AdvancedChatComponent />}
+                    {activeTab === 'podcasts' && <PodcastPlatform />}
+                    {activeTab === 'history' && <ConversationHistory />}
+                    {activeTab === 'agents' && <AgentManager />}
+                    {activeTab === 'settings' && (
+                      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                        <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">הגדרות</h2>
+                        <p className="text-gray-600 dark:text-gray-300">הגדרות יגיעו בקרוב...</p>
+                      </div>
+                    )}
+                  </div>
         </div>
       </div>
     </div>
