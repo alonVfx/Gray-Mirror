@@ -6,7 +6,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 admin.initializeApp();
 
 // Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(functions.config().gemini?.api_key || '');
+const genAI = new GoogleGenerativeAI('AIzaSyDIgJiI4987yrf915_d6qk6RCcvo92c7t4');
 
 // Callable function to interact with Gemini
 export const callGemini = functions.https.onCall(async (data, context) => {
