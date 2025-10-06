@@ -228,79 +228,143 @@ ${recentMessages.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`;
 
   // OpenAI API call
   async callOpenAI(prompt, context, provider) {
-    const response = await fetch(provider.endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${provider.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: provider.model,
-        messages: [
-          ...context.recentMessages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-          })),
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: provider.maxTokens,
-        temperature: provider.temperature,
-      }),
-    });
+    console.log('Calling OpenAI API...', { provider: provider.name, prompt: prompt.substring(0, 100) });
+    
+    try {
+      const response = await fetch(provider.endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${provider.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: provider.model,
+          messages: [
+            ...context.recentMessages.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            })),
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: provider.maxTokens,
+          temperature: provider.temperature,
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      console.log('OpenAI Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('OpenAI API error:', errorText);
+        throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('OpenAI Response data:', data);
+      return data.choices[0].message.content;
+    } catch (error) {
+      console.error('OpenAI API call failed:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
   }
 
   // Together AI API call
   async callTogether(prompt, context, provider) {
-    const response = await fetch(provider.endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${provider.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: provider.model,
-        messages: [
-          ...context.recentMessages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-          })),
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: provider.maxTokens,
-        temperature: provider.temperature,
-      }),
-    });
+    console.log('Calling Together AI API...', { provider: provider.name, prompt: prompt.substring(0, 100) });
+    
+    try {
+      const response = await fetch(provider.endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${provider.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: provider.model,
+          messages: [
+            ...context.recentMessages.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            })),
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: provider.maxTokens,
+          temperature: provider.temperature,
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Together API error: ${response.status}`);
+      console.log('Together AI Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Together AI API error:', errorText);
+        throw new Error(`Together API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Together AI Response data:', data);
+      return data.choices[0].message.content;
+    } catch (error) {
+      console.error('Together AI API call failed:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
   }
 
-  // Gemini API call (using existing Firebase function)
+  // Gemini API call (direct API)
   async callGemini(prompt, context, provider) {
-    // This will use the existing Firebase function
-    const { httpsCallable } = await import('firebase/functions');
-    const { functions } = await import('../firebase/config');
+    console.log('Calling Gemini API directly...', { provider: provider.name, prompt: prompt.substring(0, 100) });
     
-    const callGemini = httpsCallable(functions, 'callGemini');
-    
-    const result = await callGemini({
-      prompt: prompt,
-      agents: context.agents || [],
-      conversationHistory: context.recentMessages
-    });
+    try {
+      // Prepare the conversation context
+      let conversationContext = '';
+      if (context.recentMessages && context.recentMessages.length > 0) {
+        conversationContext = 'Previous conversation:\n';
+        context.recentMessages.slice(-5).forEach(msg => {
+          conversationContext += `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}\n`;
+        });
+        conversationContext += '\n';
+      }
 
-    return result.data.response;
+      const fullPrompt = `${conversationContext}Current message: ${prompt}\n\nPlease respond in Hebrew, keeping the conversation natural and engaging.`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${provider.model}:generateContent?key=${provider.apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: fullPrompt
+            }]
+          }],
+          generationConfig: {
+            temperature: provider.temperature,
+            maxOutputTokens: provider.maxTokens,
+          }
+        })
+      });
+
+      console.log('Gemini Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Gemini API error:', errorText);
+        throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Gemini Response data:', data);
+      
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
+      } else {
+        throw new Error('Invalid response format from Gemini API');
+      }
+    } catch (error) {
+      console.error('Gemini API call failed:', error);
+      throw error;
+    }
   }
 
   // Get conversation summary for display

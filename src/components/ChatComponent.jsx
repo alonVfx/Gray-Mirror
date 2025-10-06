@@ -41,6 +41,8 @@ const ChatComponent = () => {
   const [currentAIProvider, setCurrentAIProvider] = useState('together');
   const [conversationSummaries, setConversationSummaries] = useState([]);
   const [showMemoryPanel, setShowMemoryPanel] = useState(false);
+  const [conversationSpeed, setConversationSpeed] = useState(3); // Speed control (1-10)
+  const [customDelay, setCustomDelay] = useState(3000); // Custom delay in milliseconds
   const messagesEndRef = useRef(null);
   const conversationTimeoutRef = useRef(null);
   const unsubscribeRef = useRef(null);
@@ -308,22 +310,39 @@ const ChatComponent = () => {
       } else {
         console.warn('No valid response received:', response);
       }
-    } catch (error) {
-      console.error('Error generating next turn:', error);
-      // Add error message to Firestore
-      const errorMessage = {
-        text: `שגיאה ביצירת תגובה: ${error.message}`,
-        sender: 'מערכת',
-        type: 'error'
-      };
-      await saveMessageToFirestore(errorMessage);
-    }
+            } catch (error) {
+              console.error('Error generating next turn:', error);
+              // Add error message to Firestore
+              let errorText = 'שגיאה ביצירת תגובה';
+              
+              if (error.message.includes('unauthenticated')) {
+                errorText = 'נדרש להתחבר מחדש למערכת';
+              } else if (error.message.includes('resource-exhausted')) {
+                errorText = 'הגעת למגבלת ההודעות היומית';
+              } else if (error.message.includes('API error')) {
+                errorText = 'בעיה בחיבור ל-AI. נסה שוב בעוד כמה דקות';
+              } else {
+                errorText = `שגיאה: ${error.message}`;
+              }
+              
+              const errorMessage = {
+                text: errorText,
+                sender: 'מערכת',
+                type: 'error'
+              };
+              await saveMessageToFirestore(errorMessage);
+            }
 
     setIsTyping(false);
     setIsLoading(false);
     
     if (isConversationActive) {
-      conversationTimeoutRef.current = setTimeout(generateNextTurn, Math.random() * 2000 + 2000);
+      // Calculate delay based on speed setting
+      const baseDelay = customDelay;
+      const randomVariation = baseDelay * 0.3; // 30% variation
+      const finalDelay = baseDelay + (Math.random() * randomVariation * 2 - randomVariation);
+      
+      conversationTimeoutRef.current = setTimeout(generateNextTurn, finalDelay);
     }
   };
 
@@ -520,17 +539,72 @@ const ChatComponent = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow h-[800px] flex flex-col">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow h-[85vh] min-h-[700px] flex flex-col">
       {/* Chat Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">סימולטור צ'אט קבוצתי</h2>
           <div className="flex items-center space-x-2 space-x-reverse">
-            {/* AI Provider Selector */}
-            <AIProviderSelector 
-              currentProvider={currentAIProvider}
-              onProviderChange={setCurrentAIProvider}
-            />
+                    {/* AI Provider Selector */}
+                    <AIProviderSelector
+                      currentProvider={currentAIProvider}
+                      onProviderChange={setCurrentAIProvider}
+                    />
+
+                    {/* Speed Control */}
+                    <div className="flex items-center space-x-2 space-x-reverse">
+                      <label className="text-xs text-gray-600 dark:text-gray-400">מהירות:</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={conversationSpeed}
+                        onChange={(e) => {
+                          const speed = parseInt(e.target.value);
+                          setConversationSpeed(speed);
+                          // Convert speed (1-10) to delay (5000-500ms)
+                          const newDelay = 5500 - (speed * 500);
+                          setCustomDelay(newDelay);
+                        }}
+                        className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                        title={`מהירות שיחה: ${conversationSpeed}/10`}
+                      />
+                      <span className="text-xs text-gray-600 dark:text-gray-400 min-w-[60px]">
+                        {(customDelay / 1000).toFixed(1)}s
+                      </span>
+                    </div>
+
+                    {/* Test API Button */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          console.log('Testing API connectivity...');
+                          const testResponse = await aiManager.generateResponse('בדיקה - האם AI עובד?', {
+                            agents: participants,
+                            conversationHistory: []
+                          });
+                          console.log('Test response:', testResponse);
+                          const testMessage = {
+                            text: `בדיקה: ${testResponse}`,
+                            sender: 'מערכת בדיקה',
+                            type: 'test'
+                          };
+                          await saveMessageToFirestore(testMessage);
+                        } catch (error) {
+                          console.error('Test failed:', error);
+                          const errorMessage = {
+                            text: `בדיקה נכשלה: ${error.message}`,
+                            sender: 'מערכת',
+                            type: 'error'
+                          };
+                          await saveMessageToFirestore(errorMessage);
+                        }
+                      }}
+                      className="p-2 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800"
+                      title="בדיקת חיבור AI"
+                    >
+                      🔧
+                    </button>
             
             {/* Memory Panel Toggle */}
             <button
