@@ -1,11 +1,11 @@
 // AI Providers Configuration
+// Note: API keys are NOT stored here anymore for security reasons
+// All API calls go through Firebase Cloud Functions which securely handle the keys
 export const AI_PROVIDERS = {
   OPENAI: {
     name: 'OpenAI',
     id: 'openai',
     model: 'gpt-4o',
-    apiKey: process.env.REACT_APP_OPENAI_API_KEY || '',
-    endpoint: 'https://api.openai.com/v1/chat/completions',
     maxTokens: 4000,
     temperature: 0.7,
     icon: '🤖'
@@ -14,8 +14,6 @@ export const AI_PROVIDERS = {
     name: 'Together AI',
     id: 'together',
     model: 'meta-llama/Llama-3.1-70B-Instruct-Turbo',
-    apiKey: process.env.REACT_APP_TOGETHER_API_KEY || '',
-    endpoint: 'https://api.together.xyz/v1/chat/completions',
     maxTokens: 4000,
     temperature: 0.7,
     icon: '🚀'
@@ -24,8 +22,6 @@ export const AI_PROVIDERS = {
     name: 'Google Gemini',
     id: 'gemini',
     model: 'gemini-1.5-flash',
-    apiKey: process.env.REACT_APP_GEMINI_API_KEY || '',
-    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',
     maxTokens: 4000,
     temperature: 0.7,
     icon: '🧠'

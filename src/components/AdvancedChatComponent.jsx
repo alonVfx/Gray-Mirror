@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { aiManager, AI_PROVIDERS } from '../config/aiProviders';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase/config';
 import { 
   Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square, 
   Brain, History, RefreshCw, Globe, Settings, Zap, Target, Palette,
@@ -165,13 +166,19 @@ const AdvancedChatComponent = () => {
       Participants: ${participants.map(p => `${p.name} (${p.personality})`).join(', ')}.
       Make it engaging and realistic. Respond in ${language.name}.`;
 
-      const response = await aiManager.generateResponse(prompt, {
+      // Call Firebase Function with selected AI provider
+      const callAI = httpsCallable(functions, 'callAI');
+      const result = await callAI({
+        prompt: prompt,
         agents: participants,
         conversationHistory: messages.slice(-10).map(msg => ({
           sender: msg.sender,
           text: msg.text
-        }))
+        })),
+        provider: currentAIProvider // Use the selected provider
       });
+      
+      const response = result.data?.response;
 
       if (response && typeof response === 'string') {
         const parts = response.split(':');

@@ -5,12 +5,121 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 // Initialize Firebase Admin
 admin.initializeApp();
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI('AIzaSyDIgJiI4987yrf915_d6qk6RCcvo92c7t4');
+// API Keys from environment variables (set via Firebase config)
+// To set: firebase functions:config:set openai.key="YOUR_KEY" together.key="YOUR_KEY" gemini.key="YOUR_KEY"
+const OPENAI_API_KEY = functions.config().openai?.key;
+const TOGETHER_API_KEY = functions.config().together?.key;
+const GEMINI_API_KEY = functions.config().gemini?.key;
 
-// Callable function to interact with Gemini
-export const callGemini = functions.https.onCall(async (data, context) => {
-  console.log('callGemini called with data:', data);
+if (!OPENAI_API_KEY || !TOGETHER_API_KEY || !GEMINI_API_KEY) {
+  console.warn('⚠️ Warning: Some API keys are missing. Please set them using Firebase config.');
+  console.warn('Run: firebase functions:config:set openai.key="YOUR_KEY" together.key="YOUR_KEY" gemini.key="YOUR_KEY"');
+}
+
+// Initialize Gemini AI
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+// Helper function to call OpenAI API
+async function callOpenAI(prompt: string, context: any, agents: any[], conversationHistory: any[]) {
+  const messages = [
+    ...(conversationHistory || []).slice(-10).map((msg: any) => ({
+      role: msg.sender === 'user' ? 'user' : 'assistant',
+      content: msg.text || msg.content
+    })),
+    { role: 'user', content: prompt }
+  ];
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: messages,
+      max_tokens: 4000,
+      temperature: 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// Helper function to call Together AI API
+async function callTogetherAI(prompt: string, context: any, agents: any[], conversationHistory: any[]) {
+  const messages = [
+    ...(conversationHistory || []).slice(-10).map((msg: any) => ({
+      role: msg.sender === 'user' ? 'user' : 'assistant',
+      content: msg.text || msg.content
+    })),
+    { role: 'user', content: prompt }
+  ];
+
+  const response = await fetch('https://api.together.xyz/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${TOGETHER_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'meta-llama/Llama-3.1-70B-Instruct-Turbo',
+      messages: messages,
+      max_tokens: 4000,
+      temperature: 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Together AI API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// Helper function to call Gemini API
+async function callGeminiAPI(prompt: string, context: any, agents: any[], conversationHistory: any[]) {
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  
+  // Create context from agents and conversation history
+  let contextPrompt = '';
+  if (agents && agents.length > 0) {
+    contextPrompt += 'Agents in this conversation:\n';
+    agents.forEach((agent: any) => {
+      contextPrompt += `- ${agent.name}: ${agent.identity}\n`;
+      if (agent.personality) {
+        contextPrompt += `  Personality: ${agent.personality}\n`;
+      }
+    });
+    contextPrompt += '\n';
+  }
+
+  if (conversationHistory && conversationHistory.length > 0) {
+    contextPrompt += 'Recent conversation history:\n';
+    conversationHistory.slice(-10).forEach((msg: any) => {
+      contextPrompt += `${msg.sender}: ${msg.text}\n`;
+    });
+    contextPrompt += '\n';
+  }
+
+  const fullPrompt = `${contextPrompt}User message: ${prompt}\n\nPlease respond in Hebrew, keeping the conversation natural and engaging.`;
+
+  const result = await model.generateContent(fullPrompt);
+  const response = await result.response;
+  return response.text();
+}
+
+// Callable function to interact with AI providers
+export const callAI = functions.https.onCall(async (data, context) => {
+  console.log('callAI called with data:', data);
   console.log('context.auth:', context.auth);
   
   // Verify user is authenticated
@@ -19,10 +128,10 @@ export const callGemini = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
-  const { prompt, agents, conversationHistory } = data;
+  const { prompt, agents, conversationHistory, provider = 'gemini' } = data;
   const userId = context.auth.uid;
   
-  console.log('Processing request for user:', userId);
+  console.log('Processing request for user:', userId, 'with provider:', provider);
 
   try {
     // Check user quota
@@ -38,35 +147,20 @@ export const callGemini = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('resource-exhausted', 'Daily message limit reached');
     }
 
-            // Generate response using Gemini
-            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    
-    // Create context from agents and conversation history
-    let contextPrompt = '';
-    if (agents && agents.length > 0) {
-      contextPrompt += 'Agents in this conversation:\n';
-      agents.forEach((agent: any) => {
-        contextPrompt += `- ${agent.name}: ${agent.identity}\n`;
-        if (agent.personality) {
-          contextPrompt += `  Personality: ${agent.personality}\n`;
-        }
-      });
-      contextPrompt += '\n';
+    // Generate response using the selected AI provider
+    let text: string;
+    switch (provider.toLowerCase()) {
+      case 'openai':
+        text = await callOpenAI(prompt, context, agents, conversationHistory);
+        break;
+      case 'together':
+        text = await callTogetherAI(prompt, context, agents, conversationHistory);
+        break;
+      case 'gemini':
+      default:
+        text = await callGeminiAPI(prompt, context, agents, conversationHistory);
+        break;
     }
-
-    if (conversationHistory && conversationHistory.length > 0) {
-      contextPrompt += 'Recent conversation history:\n';
-      conversationHistory.slice(-10).forEach((msg: any) => {
-        contextPrompt += `${msg.sender}: ${msg.text}\n`;
-      });
-      contextPrompt += '\n';
-    }
-
-    const fullPrompt = `${contextPrompt}User message: ${prompt}\n\nPlease respond in Hebrew, keeping the conversation natural and engaging.`;
-
-    const result = await model.generateContent(fullPrompt);
-    const response = await result.response;
-    const text = response.text();
 
     // Update user quota
     await admin.firestore().collection('users').doc(userId).update({
@@ -91,11 +185,12 @@ export const callGemini = functions.https.onCall(async (data, context) => {
     return {
       response: text,
       quotaUsed: userData.quota.messagesUsedToday + 1,
-      quotaLimit: userData.quota.messagesLimitDaily
+      quotaLimit: userData.quota.messagesLimitDaily,
+      provider: provider
     };
 
-  } catch (error) {
-    console.error('Error calling Gemini:', error);
+  } catch (error: any) {
+    console.error('Error calling AI provider:', error);
     // Return a more detailed error message
     return {
       response: `שגיאה: ${error.message}`,
@@ -104,6 +199,12 @@ export const callGemini = functions.https.onCall(async (data, context) => {
       quotaLimit: 20
     };
   }
+});
+
+// Backward compatibility - keep the old callGemini function
+export const callGemini = functions.https.onCall(async (data, context) => {
+  // Just redirect to the new callAI function with gemini as the provider
+  return callAI.run({ ...data, provider: 'gemini' }, context);
 });
 
 // Simple test function for debugging

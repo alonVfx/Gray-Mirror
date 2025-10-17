@@ -16,7 +16,7 @@ import {
   startAfter
 } from 'firebase/firestore';
 import { db, functions, analytics, logEvent } from '../firebase/config';
-import { aiManager, AI_PROVIDERS } from '../config/aiProviders';
+import { AI_PROVIDERS } from '../config/aiProviders'; // Just the config constants
 // import AIProviderSelector from './AIProviderSelector';
 import { Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square, Brain, History, RefreshCw } from 'lucide-react';
 
@@ -179,21 +179,22 @@ const ChatComponent = () => {
     'bg-indigo-200 text-indigo-900', 'bg-teal-200 text-teal-900', 'bg-orange-200 text-orange-900'
   ];
 
-  const callGeminiAPI = async (prompt) => {
+  const callAIAPI = async (prompt) => {
     try {
-      console.log('Calling Gemini API with prompt:', prompt);
+      console.log('Calling AI API with prompt:', prompt, 'Provider:', currentAIProvider);
       console.log('User authenticated:', !!user);
       console.log('User ID:', user?.uid);
       
-      const callGemini = httpsCallable(functions, 'callGemini');
+      const callAI = httpsCallable(functions, 'callAI');
       
-      const result = await callGemini({
+      const result = await callAI({
         prompt: prompt,
         agents: participants,
-        conversationHistory: conversationHistory.slice(-10)
+        conversationHistory: conversationHistory.slice(-10),
+        provider: currentAIProvider
       });
       
-      console.log('Gemini API response:', result.data);
+      console.log('AI API response:', result.data);
       
       if (result.data && result.data.response) {
         return result.data.response;
@@ -256,14 +257,8 @@ const ChatComponent = () => {
       const prompt = createDirectorPrompt();
       console.log('Created prompt:', prompt);
 
-      // Use the new AI manager
-      const response = await aiManager.generateResponse(prompt, {
-        agents: participants,
-        conversationHistory: messages.slice(-10).map(msg => ({ 
-          sender: msg.sender, 
-          text: msg.text 
-        }))
-      });
+      // Use Firebase Function to call AI
+      const response = await callAIAPI(prompt);
 
       console.log('Received response from AI:', response);
 
