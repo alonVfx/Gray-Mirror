@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useSettings } from '../contexts/SettingsContext';
 import ChatComponent from '../components/ChatComponent';
 import AdvancedChatComponent from '../components/AdvancedChatComponent';
 import PodcastPlatform from '../components/PodcastPlatform';
@@ -12,6 +13,7 @@ import { LogOut, Settings, Users, MessageSquare, Crown, Moon, Sun, History, Tras
 const DashboardPage = () => {
   const { user, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
+  const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState('about');
   const [showUpgrade, setShowUpgrade] = useState(false);
 
@@ -76,7 +78,7 @@ const DashboardPage = () => {
               </div>
               
               <div className="text-sm text-gray-600 dark:text-gray-300">
-                {user?.quota?.messagesUsedToday || 0} / {user?.quota?.messagesLimitDaily || 200} הודעות
+                {user?.quota?.messagesUsedToday || 0} / {user?.quota?.messagesLimitDaily || settings?.quota?.freeMessagesDaily || 200} הודעות
               </div>
               
               <button
@@ -147,29 +149,61 @@ const DashboardPage = () => {
                         <span>צ'אט בסיסי</span>
                       </button>
 
-                      <button
-                        disabled
-                        className="w-full flex items-center justify-between space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60"
-                      >
-                        <div className="flex items-center space-x-3 space-x-reverse">
+                      {settings?.features?.advancedChatEnabled ? (
+                        <button
+                          onClick={() => setActiveTab('advanced')}
+                          className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
+                            activeTab === 'advanced'
+                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                          }`}
+                        >
                           <Zap className="h-5 w-5" />
                           <span>צ'אט מתקדם</span>
-                        </div>
-                        <Lock className="h-4 w-4" />
-                      </button>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 px-3">נפתח בקרוב</span>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            disabled
+                            className="w-full flex items-center justify-between space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60"
+                          >
+                            <div className="flex items-center space-x-3 space-x-reverse">
+                              <Zap className="h-5 w-5" />
+                              <span>צ'אט מתקדם</span>
+                            </div>
+                            <Lock className="h-4 w-4" />
+                          </button>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 px-3">נפתח בקרוב</span>
+                        </>
+                      )}
 
-                      <button
-                        disabled
-                        className="w-full flex items-center justify-between space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60"
-                      >
-                        <div className="flex items-center space-x-3 space-x-reverse">
+                      {settings?.features?.podcastsEnabled ? (
+                        <button
+                          onClick={() => setActiveTab('podcasts')}
+                          className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
+                            activeTab === 'podcasts'
+                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                          }`}
+                        >
                           <Headphones className="h-5 w-5" />
                           <span>פודקאסטים AI</span>
-                        </div>
-                        <Lock className="h-4 w-4" />
-                      </button>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 px-3">נפתח בקרוב</span>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            disabled
+                            className="w-full flex items-center justify-between space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60"
+                          >
+                            <div className="flex items-center space-x-3 space-x-reverse">
+                              <Headphones className="h-5 w-5" />
+                              <span>פודקאסטים AI</span>
+                            </div>
+                            <Lock className="h-4 w-4" />
+                          </button>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 px-3">נפתח בקרוב</span>
+                        </>
+                      )}
 
                       <button
                         onClick={() => setActiveTab('test')}
@@ -183,29 +217,33 @@ const DashboardPage = () => {
                         <span>בדיקת AI</span>
                       </button>
               
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
-                  activeTab === 'history'
-                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-                }`}
-              >
-                <History className="h-5 w-5" />
-                <span>היסטוריית שיחות</span>
-              </button>
+              {settings?.features?.historyEnabled && (
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
+                    activeTab === 'history'
+                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <History className="h-5 w-5" />
+                  <span>היסטוריית שיחות</span>
+                </button>
+              )}
               
-              <button
-                onClick={() => setActiveTab('agents')}
-                className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
-                  activeTab === 'agents'
-                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-                }`}
-              >
-                <Users className="h-5 w-5" />
-                <span>ניהול סוכנים</span>
-              </button>
+              {settings?.features?.agentManagerEnabled && (
+                <button
+                  onClick={() => setActiveTab('agents')}
+                  className={`w-full flex items-center space-x-3 space-x-reverse px-3 py-2 text-sm font-medium rounded-md ${
+                    activeTab === 'agents'
+                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <Users className="h-5 w-5" />
+                  <span>ניהול סוכנים</span>
+                </button>
+              )}
               
               <button
                 onClick={() => setActiveTab('settings')}

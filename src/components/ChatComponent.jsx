@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
@@ -23,17 +24,15 @@ import { Send, Mic, MicOff, Volume2, VolumeX, Users, Plus, X, Play, Square, Brai
 const ChatComponent = () => {
   const { user } = useAuth();
   const { isDarkMode } = useTheme();
+  const { settings } = useSettings();
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [participants, setParticipants] = useState([
-    { name: 'אליס', identity: 'מדענית חלל אופטימית' },
-    { name: 'בוב', identity: 'אסטרונאוט ציני' }
-  ]);
+  const [participants, setParticipants] = useState([]);
   const [newParticipant, setNewParticipant] = useState({ name: '', identity: '' });
-  const [scene, setScene] = useState('תא שליטה של חללית. אזעקה נשמעת.');
+  const [scene, setScene] = useState('');
   const [isConversationActive, setIsConversationActive] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState(null);
@@ -52,13 +51,24 @@ const ChatComponent = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Load default participants and scene from settings
+  useEffect(() => {
+    if (settings?.defaultParticipants && participants.length === 0) {
+      setParticipants(settings.defaultParticipants);
+    }
+    if (settings?.defaultScene && scene === '') {
+      setScene(settings.defaultScene);
+    }
+  }, [settings]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   // Load conversation summaries on mount
   useEffect(() => {
-    setConversationSummaries(aiManager.getConversationSummary());
+    // Summaries are now loaded from Firestore
+    // setConversationSummaries(aiManager.getConversationSummary());
   }, []);
 
   // Cleanup listener on unmount
@@ -608,10 +618,7 @@ const ChatComponent = () => {
                       onClick={async () => {
                         try {
                           console.log('Testing API connectivity...');
-                          const testResponse = await aiManager.generateResponse('בדיקה - האם AI עובד?', {
-                            agents: participants,
-                            conversationHistory: []
-                          });
+                          const testResponse = await callAIAPI('בדיקה - האם AI עובד?');
                           console.log('Test response:', testResponse);
                           const testMessage = {
                             text: `בדיקה: ${testResponse}`,
@@ -709,11 +716,11 @@ const ChatComponent = () => {
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">הודעות פעילות:</span>
-                  <span className="font-medium">{aiManager.memory.messages.length}</span>
+                  <span className="font-medium">{messages.length}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">סיכומים:</span>
-                  <span className="font-medium">{aiManager.memory.summaries.length}</span>
+                  <span className="font-medium">{conversationSummaries.length}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">גודל חלון:</span>
@@ -731,8 +738,9 @@ const ChatComponent = () => {
                 <button
                   onClick={async () => {
                     try {
-                      await aiManager.createConversationSummary();
-                      setConversationSummaries(aiManager.getConversationSummary());
+                      // Summaries are now handled by Firebase Functions
+                      // await aiManager.createConversationSummary();
+                      // setConversationSummaries(aiManager.getConversationSummary());
                     } catch (error) {
                       console.error('Error creating summary:', error);
                     }
@@ -743,7 +751,8 @@ const ChatComponent = () => {
                 </button>
                 <button
                   onClick={() => {
-                    aiManager.startNewConversation();
+                    // Now handled via Firestore conversation creation
+                    // aiManager.startNewConversation();
                     setMessages([]);
                     setConversationHistory([]);
                   }}

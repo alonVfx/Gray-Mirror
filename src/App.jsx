@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import AuthPage from './pages/AuthPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminPage from './pages/AdminPage';
@@ -40,30 +41,32 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Router>
-          <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors duration-200">
-            <Routes>
-              <Route path="/auth" element={<AuthPage />} />
-              <Route 
-                path="/dashboard" 
-                element={
-                  <ProtectedRoute>
-                    <DashboardPage />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/admin" 
-                element={
-                  <AdminRoute>
-                    <AdminPage />
-                  </AdminRoute>
-                } 
-              />
-              <Route path="/" element={<Navigate to="/auth" />} />
-            </Routes>
-          </div>
-        </Router>
+        <SettingsProvider>
+          <Router>
+            <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors duration-200">
+              <Routes>
+                <Route path="/auth" element={<AuthPage />} />
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    <ProtectedRoute>
+                      <DashboardPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/admin" 
+                  element={
+                    <AdminRoute>
+                      <AdminPage />
+                    </AdminRoute>
+                  } 
+                />
+                <Route path="/" element={<Navigate to="/auth" />} />
+              </Routes>
+            </div>
+          </Router>
+        </SettingsProvider>
       </AuthProvider>
     </ThemeProvider>
   );
