@@ -35,7 +35,7 @@ export function AuthProvider({ children }) {
             plan: 'free',
             quota: {
               messagesUsedToday: 0,
-              messagesLimitDaily: 20,
+              messagesLimitDaily: 200,
               lastResetDate: new Date().toISOString().split('T')[0]
             },
             createdAt: new Date().toISOString(),

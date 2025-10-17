@@ -971,7 +971,7 @@ const ChatComponent = () => {
         </div>
         
         <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-          {user?.quota?.messagesUsedToday || 0} / {user?.quota?.messagesLimitDaily || 20} הודעות נותרו
+          {user?.quota?.messagesUsedToday || 0} / {user?.quota?.messagesLimitDaily || 200} הודעות נותרו
           {user?.plan === 'free' && user?.quota?.messagesUsedToday >= user?.quota?.messagesLimitDaily && (
             <div className="text-red-500 dark:text-red-400 font-semibold mt-1">
               הגעת לגבול ההודעות החינמיות

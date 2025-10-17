@@ -76,7 +76,7 @@ const DashboardPage = () => {
               </div>
               
               <div className="text-sm text-gray-600 dark:text-gray-300">
-                {user?.quota?.messagesUsedToday || 0} / {user?.quota?.messagesLimitDaily || 20} הודעות
+                {user?.quota?.messagesUsedToday || 0} / {user?.quota?.messagesLimitDaily || 200} הודעות
               </div>
               
               <button

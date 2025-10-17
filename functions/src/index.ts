@@ -196,7 +196,7 @@ export const callAI = functions.https.onCall(async (data, context) => {
       response: `שגיאה: ${error.message}`,
       error: error.message,
       quotaUsed: 0,
-      quotaLimit: 20
+      quotaLimit: 200
     };
   }
 });
