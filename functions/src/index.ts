@@ -69,7 +69,7 @@ async function callTogetherAI(prompt: string, context: any, agents: any[], conve
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'meta-llama/Llama-3.1-70B-Instruct-Turbo',
+      model: 'meta-llama/Llama-3.1-8B-Instruct-Turbo',
       messages: messages,
       max_tokens: 4000,
       temperature: 0.7,
@@ -87,54 +87,82 @@ async function callTogetherAI(prompt: string, context: any, agents: any[], conve
 
 // Helper function to call Gemini API
 async function callGeminiAPI(prompt: string, context: any, agents: any[], conversationHistory: any[]) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-  
-  // Create context from agents and conversation history
-  let contextPrompt = '';
-  if (agents && agents.length > 0) {
-    contextPrompt += 'Agents in this conversation:\n';
-    agents.forEach((agent: any) => {
-      contextPrompt += `- ${agent.name}: ${agent.identity}\n`;
-      if (agent.personality) {
-        contextPrompt += `  Personality: ${agent.personality}\n`;
+  try {
+    // 🔍 DEBUG: Log the exact model being used
+    const modelName = 'gemini-2.0-flash';
+    console.log('🚀 [GEMINI] Using model:', modelName);
+    console.log('🚀 [GEMINI] API Key present:', !!GEMINI_API_KEY);
+    
+    const model = genAI.getGenerativeModel({ 
+      model: modelName,
+      generationConfig: {
+        maxOutputTokens: 4000,  // 🎯 Cost control - cap response length
+        temperature: 0.7,
       }
     });
-    contextPrompt += '\n';
-  }
+    
+    // 🔍 DEBUG: Verify model object
+    console.log('🚀 [GEMINI] Model object created successfully');
+    
+    // Create context from agents and conversation history
+    let contextPrompt = '';
+    if (agents && agents.length > 0) {
+      contextPrompt += 'Agents in this conversation:\n';
+      agents.forEach((agent: any) => {
+        contextPrompt += `- ${agent.name}: ${agent.identity}\n`;
+        if (agent.personality) {
+          contextPrompt += `  Personality: ${agent.personality}\n`;
+        }
+      });
+      contextPrompt += '\n';
+    }
 
-  if (conversationHistory && conversationHistory.length > 0) {
-    contextPrompt += 'Recent conversation history:\n';
-    conversationHistory.slice(-10).forEach((msg: any) => {
-      contextPrompt += `${msg.sender}: ${msg.text}\n`;
+    if (conversationHistory && conversationHistory.length > 0) {
+      contextPrompt += 'Recent conversation history:\n';
+      conversationHistory.slice(-10).forEach((msg: any) => {
+        contextPrompt += `${msg.sender}: ${msg.text}\n`;
+      });
+      contextPrompt += '\n';
+    }
+
+    const fullPrompt = `${contextPrompt}User message: ${prompt}\n\nPlease respond in Hebrew, keeping the conversation natural and engaging.`;
+    
+    console.log('🚀 [GEMINI] About to call generateContent...');
+    const result = await model.generateContent(fullPrompt);
+    console.log('🚀 [GEMINI] generateContent successful, getting response...');
+    
+    const response = await result.response;
+    const responseText = response.text();
+    
+    console.log('🚀 [GEMINI] Response length:', responseText?.length || 0);
+    return responseText;
+    
+  } catch (error: any) {
+    console.error('❌ [GEMINI] Error details:', {
+      error: error.message,
+      stack: error.stack,
+      model: 'gemini-1.5-flash',
+      apiKeyPresent: !!GEMINI_API_KEY
     });
-    contextPrompt += '\n';
+    throw new Error(`Gemini API Error: ${error.message}`);
   }
-
-  const fullPrompt = `${contextPrompt}User message: ${prompt}\n\nPlease respond in Hebrew, keeping the conversation natural and engaging.`;
-
-  const result = await model.generateContent(fullPrompt);
-  const response = await result.response;
-  return response.text();
 }
 
 // Callable function to interact with AI providers
 export const callAI = functions.https.onCall(async (data, context) => {
-  console.log('callAI called with data:', data);
-  console.log('context.auth:', context.auth);
-  
-  // Verify user is authenticated
-  if (!context.auth) {
-    console.log('No authentication context found');
+  // 🔒 SECURITY: Immediate authentication check
+  if (!context.auth || !context.auth.uid) {
+    console.log('❌ No authentication context found');
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
-  const { prompt, agents, conversationHistory, provider = 'gemini' } = data;
   const userId = context.auth.uid;
+  const { prompt, agents, conversationHistory, provider = 'gemini' } = data;
   
-  console.log('Processing request for user:', userId, 'with provider:', provider);
+  console.log('🚀 Processing request for user:', userId, 'with provider:', provider);
 
   try {
-    // Check user quota
+    // 🔒 SECURITY: Check user quota BEFORE making expensive API calls
     const userDoc = await admin.firestore().collection('users').doc(userId).get();
     const userData = userDoc.data();
     
@@ -142,9 +170,25 @@ export const callAI = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('not-found', 'User not found');
     }
 
-    // Check if user has exceeded quota
-    if (userData.plan === 'free' && userData.quota.messagesUsedToday >= userData.quota.messagesLimitDaily) {
+    // 🎯 QUOTA: Enhanced quota checking with detailed logging
+    const currentUsage = userData.quota?.messagesUsedToday || 0;
+    const dailyLimit = userData.quota?.messagesLimitDaily || 200;
+    
+    console.log(`📊 [QUOTA] User ${userId}: ${currentUsage}/${dailyLimit} messages used today`);
+    
+    if (userData.plan === 'free' && currentUsage >= dailyLimit) {
+      console.log(`❌ [QUOTA] User ${userId} exceeded daily limit`);
       throw new functions.https.HttpsError('resource-exhausted', 'Daily message limit reached');
+    }
+
+    // 🚨 RATE LIMIT: Basic rate limiting check
+    const now = Date.now();
+    const lastRequest = userData.lastAIRequest || 0;
+    const timeDiff = now - lastRequest;
+    
+    if (timeDiff < 2000) { // 2 second rate limit
+      console.log(`⚠️ [RATE] User ${userId} requesting too frequently`);
+      throw new functions.https.HttpsError('resource-exhausted', 'Please wait before sending another message');
     }
 
     // Generate response using the selected AI provider
@@ -162,9 +206,10 @@ export const callAI = functions.https.onCall(async (data, context) => {
         break;
     }
 
-    // Update user quota
+    // Update user quota and rate limiting timestamp
     await admin.firestore().collection('users').doc(userId).update({
-      'quota.messagesUsedToday': admin.firestore.FieldValue.increment(1)
+      'quota.messagesUsedToday': admin.firestore.FieldValue.increment(1),
+      'lastAIRequest': admin.firestore.FieldValue.serverTimestamp()
     });
 
     // Save conversation to Firestore
@@ -203,8 +248,10 @@ export const callAI = functions.https.onCall(async (data, context) => {
 
 // Backward compatibility - keep the old callGemini function
 export const callGemini = functions.https.onCall(async (data, context) => {
-  // Just redirect to the new callAI function with gemini as the provider
-  return callAI.run({ ...data, provider: 'gemini' }, context);
+  console.log('🔄 [BACKWARD] callGemini called, redirecting to callAI with gemini provider');
+  // Call the new callAI function directly with gemini as the provider
+  const newData = { ...data, provider: 'gemini' };
+  return await callAI.run(newData, context);
 });
 
 // Simple test function for debugging
@@ -219,24 +266,40 @@ export const testFunction = functions.https.onCall(async (data, context) => {
 });
 
 // Function to reset daily quotas (should be called by a scheduled function)
-export const resetDailyQuotas = functions.pubsub.schedule('0 0 * * *').onRun(async (context) => {
-  const usersSnapshot = await admin.firestore().collection('users').get();
-  const batch = admin.firestore().batch();
-  const today = new Date().toISOString().split('T')[0];
+export const resetDailyQuotas = functions.pubsub
+  .schedule('0 0 * * *')
+  .timeZone('Asia/Jerusalem') // 🕐 Set proper timezone
+  .onRun(async (context) => {
+    console.log('🔄 [SCHEDULED] Starting daily quota reset...');
+    
+    try {
+      const usersSnapshot = await admin.firestore().collection('users').get();
+      const batch = admin.firestore().batch();
+      const today = new Date().toISOString().split('T')[0];
+      let resetCount = 0;
 
-  usersSnapshot.docs.forEach((doc) => {
-    const userData = doc.data();
-    if (userData.quota && userData.quota.lastResetDate !== today) {
-      batch.update(doc.ref, {
-        'quota.messagesUsedToday': 0,
-        'quota.lastResetDate': today
+      usersSnapshot.docs.forEach((doc) => {
+        const userData = doc.data();
+        if (userData.quota && userData.quota.lastResetDate !== today) {
+          batch.update(doc.ref, {
+            'quota.messagesUsedToday': 0,
+            'quota.lastResetDate': today,
+            'lastQuotaReset': admin.firestore.FieldValue.serverTimestamp()
+          });
+          resetCount++;
+        }
       });
+
+      if (resetCount > 0) {
+        await batch.commit();
+        console.log(`✅ [SCHEDULED] Daily quotas reset successfully for ${resetCount} users`);
+      } else {
+        console.log('ℹ️ [SCHEDULED] No users required quota reset');
+      }
+    } catch (error) {
+      console.error('❌ [SCHEDULED] Error resetting daily quotas:', error);
     }
   });
-
-  await batch.commit();
-  console.log('Daily quotas reset successfully');
-});
 
 // Function to get user statistics (for admin dashboard)
 export const getUserStats = functions.https.onCall(async (data, context) => {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { aiManager, AI_PROVIDERS } from '../config/aiProviders';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase/config';
 import { 
   Play, Pause, Square, Volume2, VolumeX, Download, Share2, Heart, 
   Clock, Users, Star, Search, Filter, Mic, MicOff, Headphones,
@@ -145,10 +146,16 @@ const PodcastPlatform = () => {
       
       Format as a natural conversation that sounds like a real podcast.`;
 
-      const response = await aiManager.generateResponse(prompt, {
+      // Use Firebase Functions instead of direct API calls
+      const callAI = httpsCallable(functions, 'callAI');
+      const result = await callAI({
+        prompt: prompt,
         agents: [],
-        conversationHistory: []
+        conversationHistory: [],
+        provider: 'gemini' // Use Gemini as the default provider for podcasts
       });
+      
+      const response = result.data?.response;
 
       const newPodcastData = {
         id: Date.now(),

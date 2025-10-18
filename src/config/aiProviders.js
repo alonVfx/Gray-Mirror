@@ -13,7 +13,7 @@ export const AI_PROVIDERS = {
   TOGETHER: {
     name: 'Together AI',
     id: 'together',
-    model: 'meta-llama/Llama-3.1-70B-Instruct-Turbo',
+    model: 'meta-llama/Llama-3.1-8B-Instruct-Turbo', // Updated to working model
     maxTokens: 4000,
     temperature: 0.7,
     icon: '🚀'
@@ -21,7 +21,7 @@ export const AI_PROVIDERS = {
   GEMINI: {
     name: 'Google Gemini',
     id: 'gemini',
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     maxTokens: 4000,
     temperature: 0.7,
     icon: '🧠'
