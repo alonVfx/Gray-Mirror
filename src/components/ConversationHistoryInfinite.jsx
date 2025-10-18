@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { 
@@ -9,13 +9,12 @@ import {
   deleteDoc, 
   doc,
   limit,
-  startAfter,
-  DocumentSnapshot
+  startAfter
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { History, Trash2, MessageSquare, Calendar, Users, Play } from 'lucide-react';
 
-const ConversationHistory = () => {
+const ConversationHistoryInfinite = () => {
   const { user } = useAuth();
   const { isDarkMode } = useTheme();
   const [conversations, setConversations] = useState([]);
@@ -24,67 +23,123 @@ const ConversationHistory = () => {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Ref for intersection observer
+  const loadMoreRef = useRef(null);
 
   useEffect(() => {
     if (user) {
-      loadConversations();
+      loadInitialConversations();
     }
   }, [user]);
 
-  const loadConversations = async (loadMore = false) => {
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (!hasMore || loadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const target = entries[0];
+        if (target.isIntersecting && hasMore && !loadingMore) {
+          loadMoreConversations();
+        }
+      },
+      {
+        threshold: 0.1,
+        rootMargin: '100px'
+      }
+    );
+
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [hasMore, loadingMore]);
+
+  const loadInitialConversations = async () => {
     if (!user) return;
 
     try {
-      if (loadMore) {
-        setLoadingMore(true);
-      } else {
-        setLoading(true);
-        setConversations([]); // Reset for fresh load
-        setLastDoc(null);
-        setHasMore(true);
-      }
+      setLoading(true);
+      setError(null);
+      setConversations([]);
+      setLastDoc(null);
+      setHasMore(true);
 
       const conversationsRef = collection(db, 'users', user.uid, 'conversations');
-      let q = query(conversationsRef, orderBy('createdAt', 'desc'), limit(10));
-
-      // If loading more, start after the last document (cursor)
-      if (loadMore && lastDoc) {
-        q = query(conversationsRef, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(10));
-      }
-
-      const snapshot = await getDocs(q);
+      const q = query(
+        conversationsRef, 
+        orderBy('createdAt', 'desc'), 
+        limit(15) // Load more initially for better UX
+      );
       
+      const snapshot = await getDocs(q);
       const conversationsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate?.() || new Date(doc.data().createdAt)
       }));
-
-      if (loadMore) {
-        setConversations(prev => [...prev, ...conversationsData]);
-      } else {
-        setConversations(conversationsData);
-      }
-
-      // Update cursor for next page
-      if (snapshot.docs.length > 0) {
-        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-        setHasMore(snapshot.docs.length === 10); // If we got less than limit, no more data
-      } else {
-        setHasMore(false);
-      }
-
-    } catch (error) {
-      console.error('Error loading conversations:', error);
+      
+      setConversations(conversationsData);
+      updateCursor(snapshot);
+      
+    } catch (err) {
+      setError(err);
+      console.error('Error loading conversations:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreConversations = async () => {
+    if (!user || !lastDoc || loadingMore || !hasMore) return;
+
+    try {
+      setLoadingMore(true);
+      setError(null);
+
+      const conversationsRef = collection(db, 'users', user.uid, 'conversations');
+      const q = query(
+        conversationsRef, 
+        orderBy('createdAt', 'desc'),
+        startAfter(lastDoc), // Firestore cursor - start after the last document
+        limit(15)
+      );
+      
+      const snapshot = await getDocs(q);
+      const newConversations = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(doc.data().createdAt)
+      }));
+      
+      setConversations(prev => [...prev, ...newConversations]);
+      updateCursor(snapshot);
+      
+    } catch (err) {
+      setError(err);
+      console.error('Error loading more conversations:', err);
+    } finally {
       setLoadingMore(false);
     }
   };
 
-  const loadMoreConversations = () => {
-    if (!loadingMore && hasMore) {
-      loadConversations(true);
+  const updateCursor = (snapshot) => {
+    const docs = snapshot.docs;
+    if (docs.length > 0) {
+      // Update cursor to the last document for next page
+      setLastDoc(docs[docs.length - 1]);
+      // If we got fewer docs than requested, we've reached the end
+      setHasMore(docs.length === 15);
+    } else {
+      setHasMore(false);
     }
   };
 
@@ -94,6 +149,12 @@ const ConversationHistory = () => {
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'conversations', conversationId));
       setConversations(prev => prev.filter(conv => conv.id !== conversationId));
+      
+      // If we deleted the last conversation in our list, we might need to reset pagination
+      if (conversations.length === 1) {
+        setHasMore(true);
+        setLastDoc(null);
+      }
     } catch (error) {
       console.error('Error deleting conversation:', error);
       alert('שגיאה במחיקת השיחה');
@@ -126,6 +187,24 @@ const ConversationHistory = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="text-center">
+          <p className="text-red-600 dark:text-red-400 mb-4">
+            שגיאה בטעינת השיחות: {error.message}
+          </p>
+          <button
+            onClick={loadInitialConversations}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md"
+          >
+            נסה שוב
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
       {/* Header */}
@@ -133,10 +212,10 @@ const ConversationHistory = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center">
             <History className="h-6 w-6 ml-2" />
-            היסטוריית שיחות
+            היסטוריית שיחות (Infinite Scroll)
           </h2>
           <button
-            onClick={() => loadConversations(false)}
+            onClick={loadInitialConversations}
             className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm transition-colors"
           >
             רענן
@@ -158,7 +237,7 @@ const ConversationHistory = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {conversations.map((conversation) => (
+            {conversations.map((conversation, index) => (
               <div
                 key={conversation.id}
                 className={`p-4 rounded-lg border ${
@@ -186,9 +265,9 @@ const ConversationHistory = () => {
                       <div className="flex items-center mb-2">
                         <Users className="h-4 w-4 text-gray-400 ml-2" />
                         <div className="flex flex-wrap gap-1">
-                          {conversation.participants.slice(0, 3).map((participant, index) => (
+                          {conversation.participants.slice(0, 3).map((participant, participantIndex) => (
                             <span
-                              key={index}
+                              key={participantIndex}
                               className="inline-block px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full"
                             >
                               {participant.name}
@@ -224,31 +303,24 @@ const ConversationHistory = () => {
               </div>
             ))}
             
-            {/* Load More Button */}
+            {/* Load more trigger - invisible element for intersection observer */}
             {hasMore && (
-              <div className="text-center mt-6">
-                <button
-                  onClick={loadMoreConversations}
-                  disabled={loadingMore}
-                  className="px-6 py-3 bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white rounded-md transition-colors"
-                >
-                  {loadingMore ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white ml-2"></div>
-                      טוען עוד...
-                    </div>
-                  ) : (
-                    'טען עוד שיחות'
-                  )}
-                </button>
+              <div ref={loadMoreRef} className="py-4">
+                {loadingMore && (
+                  <div className="flex justify-center items-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 ml-2"></div>
+                    <span className="text-gray-600 dark:text-gray-400">טוען עוד שיחות...</span>
+                  </div>
+                )}
               </div>
             )}
             
-            {/* No more data indicator */}
+            {/* End of list indicator */}
             {!hasMore && conversations.length > 0 && (
-              <div className="text-center mt-6 py-4">
+              <div className="text-center py-8">
+                <div className="w-16 h-0.5 bg-gray-300 dark:bg-gray-600 mx-auto mb-4"></div>
                 <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  הגעת לסוף הרשימה
+                  הגעת לסוף הרשימה • {conversations.length} שיחות
                 </p>
               </div>
             )}
@@ -327,4 +399,4 @@ const ConversationHistory = () => {
   );
 };
 
-export default ConversationHistory;
+export default ConversationHistoryInfinite;
